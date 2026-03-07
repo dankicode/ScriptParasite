@@ -60,7 +60,11 @@ For bugs, please use the github issue tracker
 
 
 #### Credits
-- [Andrew Heumann], [Anton Kerezov], [Zac Zhang] for kindly contributing code improvements
+Huge thanks to the contributions of
+- [Andrew Heumann]
+- [Anton Kerezov]
+- [Zac Zhang]
+- [Dankicode]
 
 #### Contact
 For any issues, kindly ask on the discourse forum of McNeel, or open an issue on github.
