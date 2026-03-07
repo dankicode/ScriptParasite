@@ -36,8 +36,10 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
         return File.Exists(SettingsFile) ? File.ReadAllText(SettingsFile) : null;
     }
 
-    public ScriptFilesystemWatcher Watcher { get; set; }
-    public ScriptComponentWatcher ComponentWatcher { get; set; }
+    ScriptFilesystemWatcher Watcher { get; set; }
+    ScriptComponentWatcher ComponentWatcher { get; set; }
+    GrasshopperDocumentWatcher DocumentWatcher { get; set; }
+
 
     public override void CreateAttributes()
     {
@@ -178,13 +180,13 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
 
     public string Folder { get; set; }
 
+    public string ComponentIdFileName => TargetComponent.InstanceGuid.ToString().Replace(" - ", "").Substring(0, 5);
     protected string FileNameSafe
     {
         get
         {
             var name = Regex.Replace(TargetComponent.NickName, @"\W", "_");
-            var componentId = TargetComponent.InstanceGuid.ToString().Replace(" - ", "").Substring(0, 5);
-            return Path.Combine($"{Folder}", $"{name}-{componentId}.{FileExtension}");
+            return Path.Combine($"{Folder}", $"{name}-{ComponentIdFileName}.{FileExtension}");
         }
     }
     public string FileExtension => TargetScriptComponent is CSharpComponent ? "cs" : "py";
@@ -270,18 +272,17 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
             return;
         }
 
-        ComponentWatcher.IsUpdating = true;
-        var ghWatcher = new GrasshopperDocumentWatcher(OnPingDocument());
+        DocumentWatcher ??= new GrasshopperDocumentWatcher(OnPingDocument());
         try
         {
-            await ghWatcher.WaitForSolutionEnd(10000);
+            //OnPingDocument().SolutionEnd 
             Grasshopper.Instances.DocumentEditor?.BeginInvoke((Action)(async void () =>
             {
                 WriteScriptToComponent(TargetScriptComponent, FileNameSafe);
                 TargetComponent.ExpireSolution(false);
                 OnPingDocument().ScheduleSolution(10);
                 await Task.Delay(10);
-                await ghWatcher.WaitForSolutionEnd(2500);
+                await DocumentWatcher.WaitForSolutionEnd(2500);
                 ComponentWatcher.IsUpdating = false;
             }));
         }
@@ -302,7 +303,11 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
                 return false;
             }
 
-            File.WriteAllText(filename, text);
+            RemoveExistingFileWithComponentId();
+
+            var namespacedText = $"namespace ScriptParasite.Component{ComponentIdFileName};";
+            File.WriteAllText(filename, $"{namespacedText}\n{text}");
+            WriteProjectToFileIfNeeded(filename);
             return true;
         }
         catch (Exception ex)
@@ -313,9 +318,99 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
         }
     }
 
+    private void RemoveExistingFileWithComponentId()
+    {
+        var directory = Path.GetDirectoryName(FileNameSafe);
+        if (directory == null)
+        {
+            return;
+        }
+        var files = Directory.GetFiles(directory, $"*{ComponentIdFileName}*.*");
+        foreach (var file in files)
+        {
+            try
+            {
+                File.Delete(file);
+            }
+            catch (Exception ex)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
+                    $"Could not delete old script file {file}, error: {ex.Message}, stacktrace: {ex.StackTrace}");
+            }
+        }
+    }
+
+    private bool WriteProjectToFileIfNeeded(string scriptFilename)
+    {
+        var directory = Path.GetDirectoryName(scriptFilename);
+        // find if a csproj is already there, or any of the parent directories have a csproj, if so, use that one instead of writing a new one.
+        var currentDir = directory;
+        while (currentDir != null)        {
+            var csprojFiles = Directory.GetFiles(currentDir, "*.csproj");
+            if (csprojFiles.Length > 0)            {
+                return true;
+            }
+            currentDir = Path.GetDirectoryName(currentDir);
+        }
+        var project = @"<Project Sdk=""Microsoft.NET.Sdk"">
+  <PropertyGroup>
+    <TargetFramework>net90</TargetFramework>
+    <LangVersion>5</LangVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=""'$(Configuration)|$(Platform)'=='Debug|AnyCPU'"">
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include=""GH_IO"">
+      <HintPath>%ghio%\GH_IO.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include=""Grasshopper"">
+      <HintPath>%grasshopper%</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include=""RhinoCommon"">
+      <HintPath>%rhinocommon%</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+</Project>";
+        
+        if (directory == null)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Could not find directory for project file {scriptFilename}");
+            return false;
+        }
+        var projectFile = Path.Combine(directory, "GrasshopperScripts.csproj");
+        var grasshopperDir = Path.GetDirectoryName(Assembly.GetAssembly(typeof(GH_Component)).Location);
+        var rhinoCommonDir = Path.GetDirectoryName(Assembly.GetAssembly(typeof(Rhino.RhinoDoc)).Location);
+        var ghIoDir = Path.GetDirectoryName(Assembly.GetAssembly(typeof(GH_IO.Serialization.GH_IWriter)).Location);
+        project = project.Replace("%grasshopper%", grasshopperDir);
+        project = project.Replace("%rhinocommon%", rhinoCommonDir);
+        project = project.Replace("%ghio%", ghIoDir);
+        try
+        {
+            File.WriteAllText(projectFile, project);
+            return true;
+        } catch (Exception ex)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
+                $"Could not write project file to {projectFile}, error: {ex.Message}, stacktrace: {ex.StackTrace}");
+        }
+
+        return false;
+    }
+
     protected static void WriteScriptToComponent(BaseLanguageComponent scriptObject, string filename)
     {
-        scriptObject.SetSource(File.ReadAllText(filename));
+        var script = File.ReadAllText(filename);
+        // remove namespacing from the first line..
+        var lines = script.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
+        if (lines.Length > 0 && lines[0].StartsWith("namespace"))
+        {
+            lines = lines.Skip(1).ToArray();
+        }
+        script = string.Join(Environment.NewLine, lines);
+        scriptObject.SetSource(script);
         scriptObject.SetParametersFromScript();
     }
 
