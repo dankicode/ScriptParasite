@@ -15,7 +15,7 @@
         <RootNamespace>ScriptParasite</RootNamespace>
         <LangVersion>Latest</LangVersion>
         <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-        <Version>2.1.0</Version>
+        <Version>2.1.1</Version>
         <Title>Script Parasite 2</Title>
         <Company>StudioAvw</Company>
         <Description>Edit C# and Python scripts in your favorite code editors, compatible with Rhino 8's new script sources.</Description>
