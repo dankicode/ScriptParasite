@@ -33,7 +33,16 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
 
     private static string ReadDefaultFolder()
     {
-        return File.Exists(SettingsFile) ? File.ReadAllText(SettingsFile) : null;
+        if (File.Exists(SettingsFile))
+        {
+            return File.ReadAllText(SettingsFile);
+        }
+        var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "GrasshopperScripts");
+        if (Directory.Exists(path))
+        {
+            Directory.CreateDirectory(path);
+        }
+        return path;
     }
 
     ScriptFilesystemWatcher Watcher { get; set; }
@@ -301,9 +310,13 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
             {
                 return false;
             }
-
             RemoveExistingFileWithComponentId();
-            
+            // update watcher 
+            if (Watcher != null)
+            {
+                Watcher.File = Path.GetFileName(filename);
+            }
+
             if (TargetScriptComponent is CSharpComponent)
             {
                 var namespaceName = $"ScriptParasite.Component{ComponentIdFileName}";
