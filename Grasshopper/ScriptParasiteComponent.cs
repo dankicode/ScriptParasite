@@ -143,12 +143,11 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
             }
 
             if (!WriteScriptToFile(TargetScriptComponent, FileNameSafe)) return;
-
-            // Create a new FileSystemWatcher and set its properties.
-            // http://stackoverflow.com/questions/721714/notification-when-a-file-changes
+            
             AddEvents(directory, filename);
             WriteDefaultConfig(directory);
-            EnsureProject(Path.Combine(directory, "GrasshopperScripts.csproj"));
+            // do something for python as well?
+            EnsureProject(FileNameSafe);
             EnsureEditorConfig(Path.Combine(directory, ".editorconfig"));
             da.SetData(0, $"{FileNameSafe}");
         }
@@ -180,7 +179,7 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
 
     public string Folder { get; set; }
 
-    public string ComponentIdFileName => TargetComponent.InstanceGuid.ToString().Replace(" - ", "").Substring(0, 5);
+    public string ComponentIdFileName =>  DateTime.Now.ToString("yyMMdd") + "_" + TargetComponent.InstanceGuid.ToString().Replace("-", "").Substring(0, 5);
     protected string FileNameSafe
     {
         get
@@ -304,10 +303,13 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
             }
 
             RemoveExistingFileWithComponentId();
-
-            var namespacedText = $"namespace ScriptParasite.Component{ComponentIdFileName};";
-            File.WriteAllText(filename, $"{namespacedText}\n{text}");
-            WriteProjectToFileIfNeeded(filename);
+            
+            if (TargetScriptComponent is CSharpComponent)
+            {
+                var namespaceName = $"ScriptParasite.Component{ComponentIdFileName}";
+                text = ScriptTransformer.AddForDisk(text, namespaceName);
+            }
+            File.WriteAllText(filename, text);
             return true;
         }
         catch (Exception ex)
@@ -325,8 +327,9 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
         {
             return;
         }
-        var files = Directory.GetFiles(directory, $"*{ComponentIdFileName}*.*");
-        foreach (var file in files)
+        var files = Directory.GetFiles(directory, $"*{ComponentIdFileName}.*")
+            .Where(f => f.EndsWith(".py") || f.EndsWith(".cs"))
+            .ToArray();        foreach (var file in files)
         {
             try
             {
@@ -339,77 +342,29 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
             }
         }
     }
-
-    private bool WriteProjectToFileIfNeeded(string scriptFilename)
+    
+    private void EnsureProject(string scriptFilename)
     {
-        var directory = Path.GetDirectoryName(scriptFilename);
-        // find if a csproj is already there, or any of the parent directories have a csproj, if so, use that one instead of writing a new one.
-        var currentDir = directory;
-        while (currentDir != null)        {
-            var csprojFiles = Directory.GetFiles(currentDir, "*.csproj");
-            if (csprojFiles.Length > 0)            {
-                return true;
-            }
-            currentDir = Path.GetDirectoryName(currentDir);
-        }
-        var project = @"<Project Sdk=""Microsoft.NET.Sdk"">
-  <PropertyGroup>
-    <TargetFramework>net90</TargetFramework>
-    <LangVersion>5</LangVersion>
-  </PropertyGroup>
-  <PropertyGroup Condition=""'$(Configuration)|$(Platform)'=='Debug|AnyCPU'"">
-  </PropertyGroup>
-  <ItemGroup>
-    <Reference Include=""GH_IO"">
-      <HintPath>%ghio%\GH_IO.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include=""Grasshopper"">
-      <HintPath>%grasshopper%</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include=""RhinoCommon"">
-      <HintPath>%rhinocommon%</HintPath>
-      <Private>False</Private>
-    </Reference>
-  </ItemGroup>
-</Project>";
-        
-        if (directory == null)
+        if (TargetScriptComponent is CSharpComponent)
         {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Could not find directory for project file {scriptFilename}");
-            return false;
-        }
-        var projectFile = Path.Combine(directory, "GrasshopperScripts.csproj");
-        var grasshopperDir = Path.GetDirectoryName(Assembly.GetAssembly(typeof(GH_Component)).Location);
-        var rhinoCommonDir = Path.GetDirectoryName(Assembly.GetAssembly(typeof(Rhino.RhinoDoc)).Location);
-        var ghIoDir = Path.GetDirectoryName(Assembly.GetAssembly(typeof(GH_IO.Serialization.GH_IWriter)).Location);
-        project = project.Replace("%grasshopper%", grasshopperDir);
-        project = project.Replace("%rhinocommon%", rhinoCommonDir);
-        project = project.Replace("%ghio%", ghIoDir);
-        try
-        {
-            File.WriteAllText(projectFile, project);
-            return true;
-        } catch (Exception ex)
-        {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
-                $"Could not write project file to {projectFile}, error: {ex.Message}, stacktrace: {ex.StackTrace}");
+            ProjectHelper.EnsureProjectCsharp(scriptFilename);
         }
 
-        return false;
+        if (TargetScriptComponent is Python3Component)
+        {
+            ProjectHelper.EnsureVsCodeSettings(Path.GetDirectoryName(scriptFilename));
+        }
     }
 
-    protected static void WriteScriptToComponent(BaseLanguageComponent scriptObject, string filename)
+    
+
+    protected void WriteScriptToComponent(BaseLanguageComponent scriptObject, string filename)
     {
         var script = File.ReadAllText(filename);
-        // remove namespacing from the first line..
-        var lines = script.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
-        if (lines.Length > 0 && lines[0].StartsWith("namespace"))
+        if (TargetScriptComponent is CSharpComponent)
         {
-            lines = lines.Skip(1).ToArray();
+            script = ScriptTransformer.RemoveForGrasshopper(script);
         }
-        script = string.Join(Environment.NewLine, lines);
         scriptObject.SetSource(script);
         scriptObject.SetParametersFromScript();
     }
@@ -479,21 +434,13 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
     public void EnsureEditorConfig(string file)
     {
         var dir = Path.GetDirectoryName(file);
-
-            
         var hasEditorConfig = Directory.GetFiles(dir).Any(s => s == ".editorconfig");
-
         if (hasEditorConfig) return;
         const string editorConfig = @"root = true
 [*.cs]
 indent_style = space
 indent_size = 4";
         File.WriteAllText(file, editorConfig);
-    }
-    public void EnsureProject(string file)
-    {
-        // use default settings..
-        // write skeleton script component
     }
     public static void OpenFileWithDefaultApp(string filePath)
     {

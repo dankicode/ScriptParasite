@@ -38,6 +38,14 @@
             <HintPath>C:\Program Files\Rhino 8\Plug-ins\Grasshopper\Components\RhinoCodePluginGH.gha</HintPath>
             <Private>false</Private>
         </Reference>
+        <Reference Include="Microsoft.CodeAnalysis.CSharp">
+            <HintPath>C:\Program Files\Rhino 8\System\Microsoft.CodeAnalysis.CSharp.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="Microsoft.CodeAnalysis">
+            <HintPath>C:\Program Files\Rhino 8\System\Microsoft.CodeAnalysis.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
     </ItemGroup>
     <!-- Reference WinForms for .NET 7.0 on macOS -->
     <ItemGroup Condition="!($(TargetFramework.Contains('-windows')) or $(TargetFramework.StartsWith('net4')))">
