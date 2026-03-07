@@ -68,6 +68,7 @@ For any issues, kindly ask on the discourse forum of McNeel, or open an issue on
 [Andrew Heumann]:https://github.com/andrewheumann
 [Anton Kerezov]:[https://github.com/dilomo]
 [Zac Zhang]:[https://github.com/ZacZhangzhuo]
+[Dankicode]:https://github.com/dankicode
 
 ### Source code / Licence / Contributing
 The plugin is open source (MIT Licence) and available on Github. If you have suggestions or improvements, open an issue/pull request on github, and I'll get back to you.
