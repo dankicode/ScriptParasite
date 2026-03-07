@@ -251,6 +251,10 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
             return;
         }
 
+        if (Watcher == null)
+        {
+            return;
+        }
         Watcher.IsWriting = true;
         WriteScriptToFile(TargetScriptComponent, FileNameSafe);
         await Task.Delay(50);
@@ -281,6 +285,7 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
         }
 
         DocumentWatcher ??= new GrasshopperDocumentWatcher(OnPingDocument());
+        ComponentWatcher.IsUpdating = true;
         try
         {
             //OnPingDocument().SolutionEnd 
@@ -291,7 +296,6 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
                 OnPingDocument().ScheduleSolution(10);
                 await Task.Delay(10);
                 await DocumentWatcher.WaitForSolutionEnd(2500);
-                ComponentWatcher.IsUpdating = false;
             }));
         }
         catch (TimeoutException)
@@ -299,6 +303,10 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
             // do nothing..
             // grasshopper is still busy after 100 seconds..
             // time to bail out.
+        }
+        finally
+        {
+            ComponentWatcher.IsUpdating = false;
         }
     }
 
