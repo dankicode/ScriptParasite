@@ -24,7 +24,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Grasshopper" Version="8.23.25251.13001" ExcludeAssets="runtime" />
+        <PackageReference Include="Grasshopper" Version="8.25.25328.11001" ExcludeAssets="runtime" />
         <PackageReference Include="JetBrains.Annotations" Version="2025.2.2" ExcludeAssets="runtime" />
     </ItemGroup>
 
@@ -80,5 +80,13 @@
         <Exec Command="&quot;$(YakExecutable)&quot; build" WorkingDirectory="$(OutputPath)"
               Condition="$(BuildYakPackage) == 'True'" />
     </Target>
-
+    <Target Name="GenerateLaunchSettings" AfterTargets="Build">
+        <PropertyGroup>
+            <_BaseDir>$(MSBuildProjectDirectory)\bin\$(Configuration)\</_BaseDir>
+            <_BaseDirEscaped>$(_BaseDir.Replace('\', '\\'))</_BaseDirEscaped>
+            <_Template>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)\Properties\launchSettings.template.json'))</_Template>
+            <_Template>$(_Template.Replace('${RHINO_PACKAGE_BASE}', '$(_BaseDirEscaped)'))</_Template>
+        </PropertyGroup>
+        <WriteLinesToFile File="$(MSBuildProjectDirectory)\Properties\launchSettings.json" Lines="$(_Template)" Overwrite="true" />
+    </Target>
 </Project>
