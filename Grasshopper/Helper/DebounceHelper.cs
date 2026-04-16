@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -13,6 +13,7 @@ public static class DebounceHelper
         return () =>
         {
             cancelTokenSource?.Cancel();
+            cancelTokenSource?.Dispose();
             cancelTokenSource = new CancellationTokenSource();
 
             Task.Delay(milliseconds, cancelTokenSource.Token)
@@ -33,6 +34,7 @@ public static class DebounceHelper
         return () =>
         {
             cancelTokenSource?.Cancel();
+            cancelTokenSource?.Dispose();
             cancelTokenSource = new CancellationTokenSource();
 
             Task.Delay(milliseconds, cancelTokenSource.Token)
@@ -53,6 +55,7 @@ public static class DebounceHelper
         return arg =>
         {
             cancelTokenSource?.Cancel();
+            cancelTokenSource?.Dispose();
             cancelTokenSource = new CancellationTokenSource();
 
             Task.Delay(milliseconds, cancelTokenSource.Token)

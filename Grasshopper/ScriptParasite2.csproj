@@ -24,7 +24,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Grasshopper" Version="8.29.26063.11001" ExcludeAssets="runtime" />
+        <PackageReference Include="Grasshopper" Version="8.30.26103.11001" ExcludeAssets="runtime" />
         <PackageReference Include="JetBrains.Annotations" Version="2025.2.2" ExcludeAssets="runtime" />
     </ItemGroup>
 

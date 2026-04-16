@@ -47,7 +47,6 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
 
     ScriptFilesystemWatcher Watcher { get; set; }
     ScriptComponentWatcher ComponentWatcher { get; set; }
-    GrasshopperDocumentWatcher DocumentWatcher { get; set; }
 
 
     public override void CreateAttributes()
@@ -201,7 +200,14 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
 
     private async void ScriptUpdated(object sender, EventArgs e)
     {
-        await CheckAndUpdateExport();
+        try
+        {
+            await CheckAndUpdateExport();
+        }
+        catch (Exception ex)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Error exporting script to file: {ex.Message}");
+        }
     }
 
     public override void Cleanup()
@@ -231,9 +237,17 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
     }
     public override void CleanUpEvents()
     {
-        ComponentWatcher?.Dispose();
+        if (ComponentWatcher != null)
+        {
+            ComponentWatcher.ScriptUpdated -= ScriptUpdated;
+            ComponentWatcher.Dispose();
+        }
         ComponentWatcher = null;
-        Watcher?.Dispose();
+        if (Watcher != null)
+        {
+            Watcher.FileUpdated -= OnFileChanged;
+            Watcher.Dispose();
+        }
         Watcher = null;
         Message = "Disabled";
     }
@@ -251,14 +265,14 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
             return;
         }
 
-        if (Watcher == null)
-        {
-            return;
-        }
-        Watcher.IsWriting = true;
+        // Fix B: capture locally — Watcher may be nulled by CleanUpEvents during await
+        var watcher = Watcher;
+        if (watcher == null) return;
+
+        watcher.IsWriting = true;
         WriteScriptToFile(TargetScriptComponent, FileNameSafe);
         await Task.Delay(50);
-        Watcher.IsWriting = false;
+        watcher.IsWriting = false;
     }
 
     public void AddEvents(string directory, string filename)
@@ -284,29 +298,48 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
             return;
         }
 
-        DocumentWatcher ??= new GrasshopperDocumentWatcher(OnPingDocument());
-        ComponentWatcher.IsUpdating = true;
+        // Capture locally — ComponentWatcher may be nulled by CleanUpEvents during any await below
+        var componentWatcher = ComponentWatcher;
+        if (componentWatcher == null) return;
+
+        componentWatcher.IsUpdating = true;
+        var ghWatcher = new GrasshopperDocumentWatcher(OnPingDocument());
         try
         {
-            //OnPingDocument().SolutionEnd 
-            Grasshopper.Instances.DocumentEditor?.BeginInvoke((Action)(async void () =>
+            await ghWatcher.WaitForSolutionEnd(10000);
+            var editor = Grasshopper.Instances.DocumentEditor;
+            if (editor == null)
             {
-                WriteScriptToComponent(TargetScriptComponent, FileNameSafe);
-                TargetComponent.ExpireSolution(false);
-                OnPingDocument().ScheduleSolution(10);
-                await Task.Delay(10);
-                await DocumentWatcher.WaitForSolutionEnd(2500);
+                componentWatcher.IsUpdating = false;
+                ghWatcher.Dispose();
+                return;
+            }
+            editor.BeginInvoke((Action)(async void () =>
+            {
+                try
+                {
+                    WriteScriptToComponent(TargetScriptComponent, FileNameSafe);
+                    TargetComponent.ExpireSolution(false);
+                    OnPingDocument().ScheduleSolution(10);
+                    await Task.Delay(10);
+                    await ghWatcher.WaitForSolutionEnd(2500);
+                }
+                catch (Exception ex)
+                {
+                    AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                        $"Error updating component from file: {ex.Message}");
+                }
+                finally
+                {
+                    componentWatcher.IsUpdating = false;
+                    ghWatcher.Dispose();
+                }
             }));
         }
         catch (TimeoutException)
         {
-            // do nothing..
-            // grasshopper is still busy after 100 seconds..
-            // time to bail out.
-        }
-        finally
-        {
-            ComponentWatcher.IsUpdating = false;
+            componentWatcher.IsUpdating = false;
+            ghWatcher.Dispose();
         }
     }
 
@@ -390,19 +423,21 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
         // The marshalling settings ("Avoid Marshalling Inputs/Outputs" and C# guid
         // marshalling) are not stored in the plain .py/.cs file on disk. SetSource
         // replaces the underlying script object with a fresh one parsed from the file
-        // text, which resets these flags to their defaults, and SetParametersFromScript
-        // then propagates those defaults onto the component. Snapshot the settings here
-        // and restore them afterwards so a sync preserves them. See issue #20.
+        // text, which resets these flags to their defaults. Snapshot the settings here
+        // and restore them afterwards so a sync preserves them. See upstream issue #20.
         var marshInputs = scriptObject.MarshInputs;
         var marshOutputs = scriptObject.MarshOutputs;
         var marshGuids = scriptObject.MarshGuids;
 
+        // Note: SetParametersFromScript() is not called here — it only works during the
+        // component's own solve cycle. Parameter changes must be made in Grasshopper directly.
         scriptObject.SetSource(script);
-        scriptObject.SetParametersFromScript();
 
         scriptObject.MarshInputs = marshInputs;
         scriptObject.MarshOutputs = marshOutputs;
         scriptObject.MarshGuids = marshGuids;
+
+        Grasshopper.Instances.InvalidateCanvas();
     }
 
     protected bool TryGetDirectoryVerbose(string folder)
@@ -491,7 +526,7 @@ indent_size = 4";
                 {
                     FileName = filePath,
                     UseShellExecute = true // required to open with default app
-                });
+                })?.Dispose();
                 break;
 
             case PlatformID.MacOSX:
@@ -501,7 +536,7 @@ indent_size = 4";
                     FileName = "open",
                     Arguments = $"\"{filePath}\"",
                     UseShellExecute = false
-                });
+                })?.Dispose();
                 break;
 
             default:
@@ -525,7 +560,7 @@ indent_size = 4";
                 {
                     Arguments = fileExists ? $"/select,\"{fileNameSafe}\"" : folder, FileName = "explorer.exe"
                 };
-                Process.Start(startInfo);
+                Process.Start(startInfo)?.Dispose();
                 break;
             case PlatformID.MacOSX:
             case PlatformID.Unix:

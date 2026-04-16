@@ -1,5 +1,5 @@
-﻿using System;
-using System.Diagnostics;
+using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Grasshopper.Kernel;
 
@@ -7,6 +7,8 @@ namespace ScriptParasite.Watcher;
 
 public class GrasshopperDocumentWatcher : IDisposable
 {
+    private TaskCompletionSource<bool> _waitCompletion;
+
     public GrasshopperDocumentWatcher(GH_Document document)
     {
         Document = document;
@@ -20,35 +22,32 @@ public class GrasshopperDocumentWatcher : IDisposable
     private void DocumentOnSolutionEnd(object sender, GH_SolutionEventArgs e)
     {
         State = e.Document.SolutionState;
+        _waitCompletion?.TrySetResult(true);
     }
+
     private void DocumentOnSolutionStart(object sender, GH_SolutionEventArgs e)
     {
         State = e.Document.SolutionState;
     }
 
-    public delegate void ScheduleCallback();
-
     public async Task WaitForSolutionEnd(int timeout)
     {
         if (State == GH_ProcessStep.PostProcess || State == GH_ProcessStep.PreProcess)
-        {
             return;
-        }
-        var sw = new Stopwatch();
-        sw.Start();
-        while (true)
-        {
-            if (sw.ElapsedMilliseconds > timeout)
-            {
-                throw new TimeoutException();
-            }
 
-            if (State == GH_ProcessStep.PostProcess || State == GH_ProcessStep.PreProcess)
-            {
-                return;
-            }
-            await Task.Delay(10);
+        _waitCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // Double-check after assigning TCS to close the race window where solution ended
+        // between the first state check and TCS creation
+        if (State == GH_ProcessStep.PostProcess || State == GH_ProcessStep.PreProcess)
+        {
+            _waitCompletion.TrySetResult(true);
         }
+
+        using var cts = new CancellationTokenSource(timeout);
+        cts.Token.Register(() => _waitCompletion?.TrySetException(new TimeoutException()));
+
+        await _waitCompletion.Task;
     }
 
     public GH_Document Document { get; set; }
@@ -56,8 +55,9 @@ public class GrasshopperDocumentWatcher : IDisposable
     public void Dispose()
     {
         if (Document == null) return;
-
         Document.SolutionStart -= DocumentOnSolutionStart;
         Document.SolutionEnd -= DocumentOnSolutionEnd;
+        _waitCompletion?.TrySetException(new TimeoutException("Watcher disposed"));
+        Document = null;
     }
 }

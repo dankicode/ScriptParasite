@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using ScriptParasite.Helper;
 
@@ -10,7 +10,7 @@ public class ScriptFilesystemWatcher : IDisposable
     {
         File = file;
         Directory = folderToWatch;
-            
+
         Debouncer = DebounceHelper.Debounce(SendUpdate, 300);
 
         Watcher = new FileSystemWatcher(folderToWatch)
@@ -24,7 +24,8 @@ public class ScriptFilesystemWatcher : IDisposable
         Watcher.EnableRaisingEvents = true;
     }
 
-    public bool IsWriting { get; set; }
+    private volatile bool _isWriting;
+    public bool IsWriting { get => _isWriting; set => _isWriting = value; }
 
     public string Directory { get; set; }
 
@@ -44,8 +45,9 @@ public class ScriptFilesystemWatcher : IDisposable
     public Action Debouncer { get; set; }
 
     public string File { get; set; }
-        
+
     public event EventHandler<EventArgs> FileUpdated;
+
     private void HandleEvent(object sender, FileSystemEventArgs e)
     {
         if (IsWriting)
@@ -76,12 +78,13 @@ public class ScriptFilesystemWatcher : IDisposable
     {
         if (Watcher != null)
         {
+            Watcher.EnableRaisingEvents = false;
             Watcher.Renamed -= HandleRenameEvent;
             Watcher.Deleted -= HandleEvent;
             Watcher.Changed -= HandleEvent;
             Watcher.Created -= HandleEvent;
+            Watcher.Dispose();
+            Watcher = null;
         }
-
-        Watcher?.Dispose();
     }
 }
