@@ -7,7 +7,7 @@ namespace ScriptParasite.Watcher;
 
 public class GrasshopperDocumentWatcher : IDisposable
 {
-    private TaskCompletionSource<bool> _waitCompletion;
+    private volatile TaskCompletionSource<bool> _waitCompletion;
 
     public GrasshopperDocumentWatcher(GH_Document document)
     {

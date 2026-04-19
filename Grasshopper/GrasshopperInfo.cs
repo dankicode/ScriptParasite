@@ -8,14 +8,17 @@ public class GrasshopperInfo : GH_AssemblyInfo
 {
     public override string Name => "ScriptParasite2";
 
+    private static Bitmap _icon;
     //Return a 24x24 pixel bitmap to represent this GHA library.
-    public override Bitmap Icon
+    public override Bitmap Icon => _icon ??= LoadIconResource("ScriptParasite.Icon.icon.png");
+
+    private static Bitmap LoadIconResource(string resourceName)
     {
-        get
-        {
-            using var s = typeof(GrasshopperInfo).Assembly.GetManifestResourceStream("ScriptParasite.Icon.icon.png");
-            return s != null ? new Bitmap(s) : null;
-        }
+        using var s = typeof(GrasshopperInfo).Assembly.GetManifestResourceStream(resourceName);
+        if (s == null) return null;
+        // Clone into a standalone Bitmap so the source stream can be disposed safely.
+        using var temp = new Bitmap(s);
+        return new Bitmap(temp);
     }
 
     //Return a short string describing the purpose of this GHA library.

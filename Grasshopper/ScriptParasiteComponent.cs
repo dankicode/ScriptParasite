@@ -298,12 +298,17 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
             return;
         }
 
-        // Capture locally — ComponentWatcher may be nulled by CleanUpEvents during any await below
+        // Capture everything before any await or UI-thread marshalling; Cleanup may null them.
         var componentWatcher = ComponentWatcher;
-        if (componentWatcher == null) return;
+        var doc = OnPingDocument();
+        var targetScript = TargetScriptComponent;
+        var targetComp = TargetComponent;
+        var filename = FileNameSafe;
+        if (componentWatcher == null || doc == null || targetScript == null || targetComp == null || filename == null)
+            return;
 
         componentWatcher.IsUpdating = true;
-        var ghWatcher = new GrasshopperDocumentWatcher(OnPingDocument());
+        var ghWatcher = new GrasshopperDocumentWatcher(doc);
         try
         {
             await ghWatcher.WaitForSolutionEnd(10000);
@@ -318,9 +323,9 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
             {
                 try
                 {
-                    WriteScriptToComponent(TargetScriptComponent, FileNameSafe);
-                    TargetComponent.ExpireSolution(false);
-                    OnPingDocument().ScheduleSolution(10);
+                    WriteScriptToComponent(targetScript, filename);
+                    targetComp.ExpireSolution(false);
+                    doc.ScheduleSolution(10);
                     await Task.Delay(10);
                     await ghWatcher.WaitForSolutionEnd(2500);
                 }
@@ -363,7 +368,17 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
                 var namespaceName = $"ScriptParasite.Component{ComponentIdFileName}";
                 text = ScriptTransformer.AddForDisk(text, namespaceName);
             }
-            File.WriteAllText(filename, text);
+            // Write-then-rename so a crash mid-write can't leave a truncated target file.
+            var tmp = filename + ".tmp";
+            File.WriteAllText(tmp, text);
+            if (File.Exists(filename))
+            {
+                File.Replace(tmp, filename, null);
+            }
+            else
+            {
+                File.Move(tmp, filename);
+            }
             return true;
         }
         catch (Exception ex)
@@ -504,9 +519,7 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
     
     public void EnsureEditorConfig(string file)
     {
-        var dir = Path.GetDirectoryName(file);
-        var hasEditorConfig = Directory.GetFiles(dir).Any(s => s == ".editorconfig");
-        if (hasEditorConfig) return;
+        if (File.Exists(file)) return;
         const string editorConfig = @"root = true
 [*.cs]
 indent_style = space
@@ -581,19 +594,16 @@ indent_size = 4";
     /// </summary>
     public override GH_Exposure Exposure => GH_Exposure.primary;
 
-    /// <summary>
-    /// Provides an Icon for every component that will be visible in the User Interface.
-    /// Icons need to be 24x24 pixels.
-    /// You can add image files to your project resources and access them like this:
-    /// return Resources.IconForThisComponent;
-    /// </summary>
-    protected override System.Drawing.Bitmap Icon
+    private static Bitmap _icon;
+    protected override System.Drawing.Bitmap Icon => _icon ??= LoadIconResource("ScriptParasite.Icon.icon.png");
+
+    private static Bitmap LoadIconResource(string resourceName)
     {
-        get
-        {
-            using var s = Assembly.GetExecutingAssembly().GetManifestResourceStream("ScriptParasite.Icon.icon.png");
-            return s != null ? new Bitmap(s) : null;
-        }
+        using var s = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName);
+        if (s == null) return null;
+        // Clone into a standalone Bitmap so the source stream can be disposed safely.
+        using var temp = new Bitmap(s);
+        return new Bitmap(temp);
     }
     
     /// <summary>
