@@ -232,7 +232,13 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
             {
                 OpenFileWithDefaultApp(FileNameSafe);
             }
-            
+
+        });
+
+        Menu_AppendItem(menu, "Regenerate IDE project", (s, e) =>
+        {
+            if (Folder == null || TargetComponent == null) return;
+            EnsureProject(FileNameSafe, force: true);
         });
     }
     public override void CleanUpEvents()
@@ -412,16 +418,16 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
         }
     }
     
-    private void EnsureProject(string scriptFilename)
+    private void EnsureProject(string scriptFilename, bool force = false)
     {
         if (TargetScriptComponent is CSharpComponent)
         {
-            ProjectHelper.EnsureProjectCsharp(scriptFilename);
+            ProjectHelper.EnsureProjectCsharp(scriptFilename, force);
         }
 
         if (TargetScriptComponent is Python3Component)
         {
-            ProjectHelper.EnsureVsCodeSettings(Path.GetDirectoryName(scriptFilename));
+            ProjectHelper.EnsureVsCodeSettings(Path.GetDirectoryName(scriptFilename), force);
         }
     }
 
