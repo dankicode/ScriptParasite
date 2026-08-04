@@ -15,7 +15,7 @@
         <RootNamespace>ScriptParasite</RootNamespace>
         <LangVersion>Latest</LangVersion>
         <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-        <Version>2.1.1</Version>
+        <Version>2.1.2</Version>
         <Title>Script Parasite 2</Title>
         <Company>StudioAvw</Company>
         <Description>Edit C# and Python scripts in your favorite code editors, compatible with Rhino 8's new script sources.</Description>
@@ -24,7 +24,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Grasshopper" Version="8.25.25328.11001" ExcludeAssets="runtime" />
+        <PackageReference Include="Grasshopper" Version="8.29.26063.11001" ExcludeAssets="runtime" />
         <PackageReference Include="JetBrains.Annotations" Version="2025.2.2" ExcludeAssets="runtime" />
     </ItemGroup>
 
@@ -59,7 +59,6 @@
             Include="$(PkgMicrosoft_NETFramework_ReferenceAssemblies_net48)\build\.NETFramework\v4.8\System.Windows.Forms.dll"
             Private="False" />
         <PackageReference Include="System.Drawing.Common" Version="7.0.0" ExcludeAssets="runtime" />
-
     </ItemGroup>
     <ItemGroup>
       <None Remove="Icon\icon.png" />

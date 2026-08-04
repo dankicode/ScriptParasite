@@ -386,8 +386,23 @@ public class ScriptParasiteComponent : SafeComponent, IParasiteComponent
         {
             script = ScriptTransformer.RemoveForGrasshopper(script);
         }
+
+        // The marshalling settings ("Avoid Marshalling Inputs/Outputs" and C# guid
+        // marshalling) are not stored in the plain .py/.cs file on disk. SetSource
+        // replaces the underlying script object with a fresh one parsed from the file
+        // text, which resets these flags to their defaults, and SetParametersFromScript
+        // then propagates those defaults onto the component. Snapshot the settings here
+        // and restore them afterwards so a sync preserves them. See issue #20.
+        var marshInputs = scriptObject.MarshInputs;
+        var marshOutputs = scriptObject.MarshOutputs;
+        var marshGuids = scriptObject.MarshGuids;
+
         scriptObject.SetSource(script);
         scriptObject.SetParametersFromScript();
+
+        scriptObject.MarshInputs = marshInputs;
+        scriptObject.MarshOutputs = marshOutputs;
+        scriptObject.MarshGuids = marshGuids;
     }
 
     protected bool TryGetDirectoryVerbose(string folder)
