@@ -19,7 +19,7 @@ public static class DebounceHelper
             Task.Delay(milliseconds, cancelTokenSource.Token)
                 .ContinueWith(t =>
                 {
-                    if (t.IsCompleted)
+                    if (t.Status == TaskStatus.RanToCompletion)
                     {
                         func();
                     }
@@ -40,7 +40,7 @@ public static class DebounceHelper
             Task.Delay(milliseconds, cancelTokenSource.Token)
                 .ContinueWith(t =>
                 {
-                    if (t.IsCompleted && !t.IsCanceled)
+                    if (t.Status == TaskStatus.RanToCompletion)
                     {
                         func();
                     }
@@ -61,7 +61,7 @@ public static class DebounceHelper
             Task.Delay(milliseconds, cancelTokenSource.Token)
                 .ContinueWith(t =>
                 {
-                    if (t.IsCompleted)
+                    if (t.Status == TaskStatus.RanToCompletion)
                     {
                         func(arg);
                     }
