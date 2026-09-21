@@ -7,7 +7,7 @@ components to files on disk and syncs edits back. Build: `Grasshopper/ScriptPara
 
 - `master` mirrors `upstream/master` exactly. Never commit to it; sync with
   `git fetch upstream && git merge --ff-only upstream/master`, then push to origin.
-- `feature/ide-stubs` is the daily-driver branch and the one that gets built and installed.
+- `fork/main` is the daily-driver branch and the one that gets built and installed.
   Rebase it onto `master` after each upstream sync. Conflicts land in
   `Grasshopper/ScriptParasiteComponent.cs` and the csproj.
 - Do not open PRs against upstream. The maintainer does not accept AI-generated PRs.
@@ -69,5 +69,5 @@ components to files on disk and syncs edits back. Build: `Grasshopper/ScriptPara
 
 ## Untracked working notes
 
-`ONBOARDING.md`, `PLAN.md`, `REVIEW.md`, `WALKTHROUGH.md` at the repo root are local audit
+`ONBOARDING.md` and `WALKTHROUGH.md` at the repo root are local audit
 notes, not committed. Leave them out of `git add`.
