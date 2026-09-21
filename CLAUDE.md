@@ -28,13 +28,22 @@ components to files on disk and syncs edits back. Build: `Grasshopper/ScriptPara
   a Yak packaging step (harmless warning). Rhino 8 in .NET Core mode loads `net8.0-windows`.
 - Deploy is a manual copy, not Yak. With Rhino closed:
   `Copy-Item Grasshopper\bin\Release\net8.0-windows\ScriptParasite2.gha "$env:APPDATA\McNeel\Rhinoceros\packages\8.0\ScriptParasite2\2.1.1.0\net8.0-windows\"`
-  (the folder name says 2.1.1.0 from the original Yak install; it does not matter for loading).
   Do not also drop the gha in `%APPDATA%\Grasshopper\Libraries`; it double-loads.
+- Package folder layout (Yak's, left over from the original April 2026 install, kept on purpose):
+  `packages\8.0\ScriptParasite2\manifest.txt` holds one line, `2.1.1.0`, naming the version
+  folder Rhino loads from. The folder name and manifest are NOT the plugin version and are
+  never bumped; only the gha inside changes. Don't create a new version folder, and don't
+  "fix" the manifest.
+- The plugin's real version is embedded in the gha (`<Version>` in the csproj, surfaced by
+  `GrasshopperInfo.AssemblyVersion`). Explorer's Details tab does not show it for `.gha`.
+  Verify with `(Get-Item <path to gha>).VersionInfo.FileVersion` or in Grasshopper's plugin list.
+- Versioning: keep upstream's three segments and add a fourth for fork builds (`2.1.2.1`), so
+  the Grasshopper plugin list distinguishes a fork build from the stock release. Bump the
+  fourth segment on every deployed build; after an upstream sync, take upstream's three and
+  reset the fourth to 1.
 - The `Grasshopper` NuGet package version must match the installed Rhino build. The csproj
   references `RhinoCodePluginGH.gha` from the install, and a version mismatch fails with
   CS1705. Check `(Get-Item 'C:\Program Files\Rhino 8\Plug-ins\Grasshopper\Grasshopper.dll').VersionInfo.FileVersion`.
-- Versioning: keep upstream's three segments and add a fourth for fork builds (`2.1.2.1`), so
-  the Grasshopper plugin list distinguishes a fork build from the stock release.
 - No automated tests. Test by pointing a component at a scratch folder (e.g. `C:\tmp\sp-stub-test`),
   saving from the editor, and checking the component and the generated csproj / `.vscode` files.
 
